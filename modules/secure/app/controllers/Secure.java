@@ -1,8 +1,23 @@
 package controllers;
 
+import java.io.UnsupportedEncodingException;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.net.URLDecoder;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import javax.servlet.http.HttpServletRequest;
+import models.GoogleAuthProcess;
+import org.expressme.openid.Association;
+import org.expressme.openid.Authentication;
+import org.expressme.openid.Endpoint;
+import org.expressme.openid.OpenIdManager;
+import play.Logger;
 import play.Play;
+import play.cache.Cache;
 import play.mvc.*;
 import play.data.validation.*;
 import play.libs.*;
@@ -10,11 +25,13 @@ import play.utils.*;
 
 public class Secure extends Controller {
 
-    @Before(unless={"login", "authenticate", "logout"})
+    public static final String GOOGLEURL = "https://www.google.com/accounts/o8/site-xrds?hd=";
+
+    @Before(unless = {"login", "authenticate", "logout", "askGoogle", "finishAuth"})
     static void checkAccess() throws Throwable {
         // Authent
         if(!session.contains("username")) {
-            flash.put("url", request.method == "GET" ? request.url : "/"); // seems a good default
+            flash.put("url", request.method.equals("GET") ? request.url : "/"); // seems a good default
             login();
         }
         // Checks
@@ -50,7 +67,100 @@ public class Secure extends Controller {
             }
         }
         flash.keep("url");
+        // If user set the withgoogle to true, we just need to redirect.
+        if(Play.configuration.getProperty("auth.withgoogle", "false").equals("true")) {
+            String domain = Play.configuration.getProperty("auth.googledomain", request.domain);
+
+            askGoogle(domain);
+            return;
+
+        }
         render();
+    }
+
+    static void askGoogle(String domain) {
+        OpenIdManager manager = new OpenIdManager();
+
+        Long id = GoogleAuthProcess.nextID();
+        String finishID = "auth" + id.toString();
+
+        manager.setRealm("http://" + request.domain + "/");
+        Map map = new HashMap();
+        map.put("id", finishID);
+        manager.setReturnTo("http://" + request.domain + Router.reverse("Secure.finishAuth",map));
+
+
+        Endpoint endpoint = manager.lookupEndpoint(GOOGLEURL + domain);
+        Association association = manager.lookupAssociation(endpoint);
+        String authUrl = manager.getAuthenticationUrl(endpoint, association);
+
+        GoogleAuthProcess process = new GoogleAuthProcess();
+        process.manager = manager;
+        process.association = association;
+        process.endPoint = endpoint;
+
+        Cache.add(finishID, process, "10min");
+
+        flash.keep("url");
+        redirect(authUrl);
+
+
+    }
+
+    public static void finishAuth(String id) {
+
+        try {
+            GoogleAuthProcess process = (GoogleAuthProcess) Cache.get(id);
+            if(process == null) {
+               Logger.error("No Google Authentication process");
+                return;
+            }
+            OpenIdManager manager = process.manager;
+            Authentication auth = manager.getAuthentication(createRequest(request.url), process.association.getRawMacKey(), "ext1");
+
+            session.put("username", auth.getIdentity());
+            session.put("fullName", auth.getFullname());
+            session.put("firstName", auth.getFirstname());
+            session.put("lastName", auth.getLastname());
+            session.put("language", auth.getLanguage());
+            session.put("email", auth.getEmail());
+            redirectToOriginalURL();
+        } catch (Throwable ex) {
+            Logger.error(ex.getMessage());
+        }
+
+
+    }
+
+    static HttpServletRequest createRequest(String url) throws UnsupportedEncodingException {
+        int pos = url.indexOf('?');
+        if(pos == (-1)) {
+            throw new IllegalArgumentException("Bad url.");
+        }
+        String query = url.substring(pos + 1);
+        String[] urlparams = query.split("[\\&]+");
+        final Map<String, String> map = new HashMap<String, String>();
+        for(String param : urlparams) {
+            pos = param.indexOf('=');
+            if(pos == (-1)) {
+                throw new IllegalArgumentException("Bad url.");
+            }
+            String key = param.substring(0, pos);
+            String value = param.substring(pos + 1);
+            map.put(key, URLDecoder.decode(value, "UTF-8"));
+        }
+        return (HttpServletRequest) Proxy.newProxyInstance(
+                Secure.class.getClassLoader(),
+                new Class[]{HttpServletRequest.class},
+                new InvocationHandler() {
+
+                    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                        if(method.getName().equals("getParameter")) {
+                            return map.get((String) args[0]);
+                        }
+                        throw new UnsupportedOperationException(method.getName());
+                    }
+                });
     }
 
     public static void authenticate(@Required String username, String password, boolean remember) throws Throwable {
@@ -63,7 +173,7 @@ public class Secure extends Controller {
             // This is the official method name
             allowed = (Boolean)Security.invoke("authenticate", username, password);
         }
-        if(validation.hasErrors() || !allowed) {
+        if(Validation.hasErrors() || !allowed) {
             flash.keep("url");
             flash.error("secure.error");
             params.flash();
@@ -176,7 +286,7 @@ public class Secure extends Controller {
         private static Object invoke(String m, Object... args) throws Throwable {
             Class security = null;
             List<Class> classes = Play.classloader.getAssignableClasses(Security.class);
-            if(classes.size() == 0) {
+            if(classes.isEmpty()) {
                 security = Security.class;
             } else {
                 security = classes.get(0);
