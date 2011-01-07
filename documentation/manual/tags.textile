@@ -183,7 +183,7 @@ Inserts a **form** tag. The HTTP method is guessed from the route, and defaults 
 
 Charset encoding is always ‘utf-8’.
 
-bc. #{form @Client.create() , id:'creationForm' enctype:'multipart/form-data' }
+bc. #{form @Client.create() , id:'creationForm', enctype:'multipart/form-data' }
    ...
 #{/form}
 
@@ -226,6 +226,9 @@ And retrieve keys from JavaScript:
 bc. alert(i18n('hello_world'));
 alert(i18n('hello_someone', 'John'));
 
+Optionally, you can restrict the tag to only some messages. The wildcard character is accepted at the end:
+
+bc. #{i18n keys:['title', 'menu.*'] /}
 
 h2. <a name="if">if</a>
 

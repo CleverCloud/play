@@ -381,13 +381,12 @@ public class Router {
         if (action.startsWith("controllers.")) {
             action = action.substring(12);
         }
-        Map<String, Object> argsbackup = args;
+        Map<String, Object> argsbackup = new HashMap<String, Object>(args);
         // Add routeArgs
         if (Scope.RouteArgs.current() != null) {
-            argsbackup.putAll(Scope.RouteArgs.current().data);
+            args.putAll(Scope.RouteArgs.current().data);
         }
         for (Route route : routes) {
-            args = new HashMap<String, Object>(argsbackup);
             if (route.actionPattern != null) {
                 Matcher matcher = route.actionPattern.matcher(action);
                 if (matcher.matches()) {
@@ -473,6 +472,8 @@ public class Router {
                                 }
                             } else if (route.staticArgs.containsKey(key)) {
                                 // Do nothing -> The key is static
+                            } else if (Scope.RouteArgs.current().data.containsKey(key)) {
+                                // Do nothing -> The key is provided in RouteArgs and not used (see #447)
                             } else if (value != null) {
                                 if (List.class.isAssignableFrom(value.getClass())) {
                                     @SuppressWarnings("unchecked")
@@ -516,7 +517,7 @@ public class Router {
                         actionDefinition.method = route.method == null || route.method.equals("*") ? "GET" : route.method.toUpperCase();
                         actionDefinition.star = "*".equals(route.method);
                         actionDefinition.action = action;
-                        actionDefinition.args = args;
+                        actionDefinition.args = argsbackup;
                         actionDefinition.host = host;
                         return actionDefinition;
                     }
@@ -673,17 +674,19 @@ public class Router {
                     if (m.matches()) {
                         if (this.host.contains("{")) {
                             String name = m.group(1).replace("{", "").replace("}", "");
-                            hostArg = new Arg();
-                            hostArg.name = name;
-                            Logger.trace("hostArg name [" + name + "]");
-                            // The default value contains the route version of the host ie {client}.bla.com
-                            // It is temporary and it indicates it is an url route.
-                            // TODO Check that default value is actually used for other cases.
-                            hostArg.defaultValue = host;
-                            hostArg.constraint = new Pattern(".*");
-                            Logger.trace("adding hostArg [" + hostArg + "]");
+                            if(!name.equals("_")) {
+                                hostArg = new Arg();
+                                hostArg.name = name;
+                                Logger.trace("hostArg name [" + name + "]");
+                                // The default value contains the route version of the host ie {client}.bla.com
+                                // It is temporary and it indicates it is an url route.
+                                // TODO Check that default value is actually used for other cases.
+                                hostArg.defaultValue = host;
+                                hostArg.constraint = new Pattern(".*");
+                                Logger.trace("adding hostArg [" + hostArg + "]");
 
-                            args.add(hostArg);
+                                args.add(hostArg);
+                            }
                         }
                     }
 
