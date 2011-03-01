@@ -1,5 +1,6 @@
 package play.libs.ws;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -7,7 +8,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Future;
 
 import oauth.signpost.AbstractOAuthConsumer;
 import oauth.signpost.exception.OAuthCommunicationException;
@@ -20,6 +20,7 @@ import org.apache.commons.lang.NotImplementedException;
 import play.Logger;
 import play.Play;
 import play.libs.Codec;
+import play.libs.F.Promise;
 import play.libs.MimeTypes;
 import play.libs.OAuth.ServiceInfo;
 import play.libs.OAuth.TokenPair;
@@ -121,7 +122,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a GET request asynchronously. */
         @Override
-        public Future<HttpResponse> getAsync() {
+        public Promise<HttpResponse> getAsync() {
             this.type = "GET";
             sign();
             return execute(httpClient.prepareGet(url));
@@ -141,7 +142,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a POST request asynchronously.*/
         @Override
-        public Future<HttpResponse> postAsync() {
+        public Promise<HttpResponse> postAsync() {
             this.type = "POST";
             sign();
             return execute(httpClient.preparePost(url));
@@ -160,7 +161,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a PUT request asynchronously.*/
         @Override
-        public Future<HttpResponse> putAsync() {
+        public Promise<HttpResponse> putAsync() {
             this.type = "PUT";
             return execute(httpClient.preparePut(url));
         }
@@ -178,7 +179,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a DELETE request asynchronously.*/
         @Override
-        public Future<HttpResponse> deleteAsync() {
+        public Promise<HttpResponse> deleteAsync() {
             this.type = "DELETE";
             return execute(httpClient.prepareDelete(url));
         }
@@ -196,7 +197,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a OPTIONS request asynchronously.*/
         @Override
-        public Future<HttpResponse> optionsAsync() {
+        public Promise<HttpResponse> optionsAsync() {
             this.type = "OPTIONS";
             return execute(httpClient.prepareOptions(url));
         }
@@ -214,7 +215,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a HEAD request asynchronously.*/
         @Override
-        public Future<HttpResponse> headAsync() {
+        public Promise<HttpResponse> headAsync() {
             this.type = "HEAD";
             return execute(httpClient.prepareHead(url));
         }
@@ -228,7 +229,7 @@ public class WSAsync implements WSImpl {
 
         /** Execute a TRACE request asynchronously.*/
         @Override
-        public Future<HttpResponse> traceAsync() {
+        public Promise<HttpResponse> traceAsync() {
             this.type = "TRACE";
             throw new NotImplementedException();
         }
@@ -260,18 +261,23 @@ public class WSAsync implements WSImpl {
             return builder;
         }
 
-        private Future<HttpResponse> execute(BoundRequestBuilder builder) {
+        private Promise<HttpResponse> execute(BoundRequestBuilder builder) {
             try {
-                return prepare(builder).execute(new AsyncCompletionHandler<HttpResponse>() {
+                final Promise<HttpResponse> smartFuture = new Promise<HttpResponse>();
+                prepare(builder).execute(new AsyncCompletionHandler<HttpResponse>() {
                     @Override
                     public HttpResponse onCompleted(Response response) throws Exception {
-                        return new HttpAsyncResponse(response);
+                        HttpResponse httpResponse = new HttpAsyncResponse(response);
+                        smartFuture.invoke(httpResponse);
+                        return httpResponse;
                     }
                     @Override
                     public void onThrowable(Throwable t) {
                         throw new RuntimeException(t);
                     }
                 });
+
+                return smartFuture;
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -384,6 +390,8 @@ public class WSAsync implements WSImpl {
         public String getString() {
             try {
                 return response.getResponseBody();
+            } catch (IllegalStateException e) {
+                return ""; // Workaround AHC's bug on empty responses
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
@@ -397,6 +405,8 @@ public class WSAsync implements WSImpl {
         public InputStream getStream() {
             try {
                 return response.getResponseBodyAsStream();
+            } catch (IllegalStateException e) {
+                return new ByteArrayInputStream(new byte[]{}); // Workaround AHC's bug on empty responses
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

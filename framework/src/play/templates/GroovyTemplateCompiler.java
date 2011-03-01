@@ -43,6 +43,14 @@ public class GroovyTemplateCompiler extends TemplateCompiler {
     String source() {
         String source = template.source;
 
+        // If a plugin has something to change in the template before the compilation
+        for(PlayPlugin plugin : Play.plugins) {
+            String newSource = plugin.overrideTemplateSource(template, source);
+            if(newSource != null) {
+                source = newSource;
+            }
+        }
+
         // Static access
         List<String> names = new ArrayList<String>();
         Map<String, String> originalNames = new HashMap<String, String>();
@@ -153,7 +161,7 @@ public class GroovyTemplateCompiler extends TemplateCompiler {
         String expr = parser.getToken().trim();
         print("\t__val=");
         print(expr);
-        print(";out.print(__val!=null?__safe(__val):'')");
+        print(";out.print(__val!=null?__safe(__val, __val.toString()):'')");
         markLine(parser.getLine());
         println();
     }

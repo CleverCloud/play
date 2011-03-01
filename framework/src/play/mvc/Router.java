@@ -31,12 +31,11 @@ import play.utils.Default;
  */
 public class Router {
 
-    static Pattern routePattern = new Pattern("^({method}GET|POST|PUT|DELETE|OPTIONS|HEAD|\\*)[(]?({headers}[^)]*)(\\))?\\s+({path}.*/[^\\s]*)\\s+({action}[^\\s(]+)({params}.+)?(\\s*)$");
+    static Pattern routePattern = new Pattern("^({method}GET|POST|PUT|DELETE|OPTIONS|HEAD|WS|\\*)[(]?({headers}[^)]*)(\\))?\\s+({path}.*/[^\\s]*)\\s+({action}[^\\s(]+)({params}.+)?(\\s*)$");
     /**
      * Pattern used to locate a method override instruction in request.querystring
      */
     static Pattern methodOverride = new Pattern("^.*x-http-method-override=({method}GET|PUT|POST|DELETE).*$");
-
     /**
      * Timestamp the routes file was last loaded at.
      */
@@ -167,7 +166,7 @@ public class Router {
         }
         parse(content, prefix, fileAbsolutePath);
     }
-    
+
     static void parse(String content, String prefix, String fileAbsolutePath) {
         int lineNumber = 0;
         for (String line : content.split("\n")) {
@@ -230,7 +229,6 @@ public class Router {
             }
         }
     }
-
     /**
      * All the loaded routes.
      */
@@ -323,7 +321,11 @@ public class Router {
     }
 
     public static String getFullUrl(String action, Map<String, Object> args) {
-        return Http.Request.current().getBase() + reverse(action, args);
+        ActionDefinition actionDefinition = reverse(action, args);
+        if(actionDefinition.method.equals("WS")) {
+            return Http.Request.current().getBase().replaceFirst("https?", "ws") + actionDefinition;
+        }
+        return Http.Request.current().getBase() + actionDefinition;
     }
 
     public static String getFullUrl(String action) {
@@ -376,7 +378,7 @@ public class Router {
         }
         return reverse(file, absolute);
     }
-    
+
     public static ActionDefinition reverse(String action, Map<String, Object> args) {
         if (action.startsWith("controllers.")) {
             action = action.substring(12);
@@ -384,7 +386,11 @@ public class Router {
         Map<String, Object> argsbackup = new HashMap<String, Object>(args);
         // Add routeArgs
         if (Scope.RouteArgs.current() != null) {
-            args.putAll(Scope.RouteArgs.current().data);
+            for (String key : Scope.RouteArgs.current().data.keySet()) {
+                if (!args.containsKey(key)) {
+                    args.put(key, Scope.RouteArgs.current().data.get(key));
+                }               
+            }
         }
         for (Route route : routes) {
             if (route.actionPattern != null) {
@@ -459,20 +465,20 @@ public class Router {
                                     List<Object> vals = (List<Object>) value;
                                     try {
                                         path = path.replaceAll("\\{(<[^>]+>)?" + key + "\\}", URLEncoder.encode(vals.get(0).toString().replace("$", "\\$"), "utf-8"));
-                                    } catch(UnsupportedEncodingException e) {
+                                    } catch (UnsupportedEncodingException e) {
                                         throw new UnexpectedException(e);
                                     }
                                 } else {
                                     try {
                                         path = path.replaceAll("\\{(<[^>]+>)?" + key + "\\}", URLEncoder.encode(value.toString().replace("$", "\\$"), "utf-8").replace("%3A", ":").replace("%40", "@"));
                                         host = host.replaceAll("\\{(<[^>]+>)?" + key + "\\}", URLEncoder.encode(value.toString().replace("$", "\\$"), "utf-8").replace("%3A", ":").replace("%40", "@"));
-                                    } catch(UnsupportedEncodingException e) {
+                                    } catch (UnsupportedEncodingException e) {
                                         throw new UnexpectedException(e);
                                     }
                                 }
                             } else if (route.staticArgs.containsKey(key)) {
                                 // Do nothing -> The key is static
-                            } else if (Scope.RouteArgs.current().data.containsKey(key)) {
+                            } else if (Scope.RouteArgs.current() != null && Scope.RouteArgs.current().data.containsKey(key)) {
                                 // Do nothing -> The key is provided in RouteArgs and not used (see #447)
                             } else if (value != null) {
                                 if (List.class.isAssignableFrom(value.getClass())) {
@@ -528,31 +534,27 @@ public class Router {
     }
 
     public static class ActionDefinition {
+
         /**
          * The domain/host name.
          */
         public String host;
-
         /**
          * The HTTP method, e.g. "GET".
          */
         public String method;
-
         /**
          * @todo - what is this? does it include the domain?
          */
         public String url;
-
         /**
          * Whether the route contains an astericks *.
          */
         public boolean star;
-
         /**
          * @todo - what is this? does it include the class and package?
          */
         public String action;
-
         /**
          * @todo - are these the required args in the routing file, or the query string in a request?
          */
@@ -584,6 +586,9 @@ public class Router {
                     url = Http.Request.current().getBase() + url;
                 } else {
                     url = (Http.Request.current().secure ? "https://" : "http://") + host + url;
+                }
+                if(method.equals("WS")) {
+                    url = url.replaceFirst("https?", "ws");
                 }
             }
         }
@@ -674,7 +679,7 @@ public class Router {
                     if (m.matches()) {
                         if (this.host.contains("{")) {
                             String name = m.group(1).replace("{", "").replace("}", "");
-                            if(!name.equals("_")) {
+                            if (!name.equals("_")) {
                                 hostArg = new Arg();
                                 hostArg.name = name;
                                 Logger.trace("hostArg name [" + name + "]");
@@ -733,7 +738,6 @@ public class Router {
         }
 
         // TODO: Add args names
-
         public void addFormat(String params) {
             if (params == null || params.length() < 1) {
                 return;

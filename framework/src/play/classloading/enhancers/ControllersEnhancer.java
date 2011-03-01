@@ -14,6 +14,7 @@ import javassist.bytecode.annotation.Annotation;
 import javassist.expr.ExprEditor;
 import javassist.expr.FieldAccess;
 import javassist.expr.Handler;
+import org.apache.commons.javaflow.bytecode.transformation.asm.AsmClassTransformer;
 import play.Logger;
 import play.Play;
 import play.classloading.ApplicationClasses.ApplicationClass;
@@ -132,6 +133,7 @@ public class ControllersEnhancer extends Enhancer {
 
         // Done.
         applicationClass.enhancedByteCode = ctClass.toBytecode();
+
         ctClass.defrost();
 
     }
@@ -146,7 +148,7 @@ public class ControllersEnhancer extends Enhancer {
      * Check if a field must be translated to a 'thread safe field'
      */
     static boolean isThreadedFieldAccess(CtField field) {
-        if (field.getDeclaringClass().getName().equals("play.mvc.Controller")) {
+        if (field.getDeclaringClass().getName().equals("play.mvc.Controller") || field.getDeclaringClass().getName().equals("play.mvc.WebSocket")) {
             return field.getName().equals("params")
                     || field.getName().equals("request")
                     || field.getName().equals("response")
@@ -155,6 +157,8 @@ public class ControllersEnhancer extends Enhancer {
                     || field.getName().equals("renderArgs")
                     || field.getName().equals("routeArgs")
                     || field.getName().equals("validation")
+                    || field.getName().equals("inbound")
+                    || field.getName().equals("outbound")
                     || field.getName().equals("flash");
         }
         return false;

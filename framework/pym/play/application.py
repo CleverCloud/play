@@ -128,7 +128,7 @@ class PlayApplication:
 
         # The default
         classpath.append(os.path.normpath(os.path.join(self.path, 'conf')))
-        classpath.append(os.path.normpath(os.path.join(self.play_env["basedir"], 'framework/play.jar')))
+        classpath.append(os.path.normpath(os.path.join(self.play_env["basedir"], 'framework/play-%s.jar' % self.play_env['version'])))
 
         # The application
         if os.path.exists(os.path.join(self.path, 'lib')):
@@ -153,7 +153,7 @@ class PlayApplication:
         return classpath
 
     def agent_path(self):
-        return os.path.join(self.play_env["basedir"], 'framework/play.jar')
+        return os.path.join(self.play_env["basedir"], 'framework/play-%s.jar' % self.play_env['version'])
 
     def cp_args(self):
         classpath = self.getClasspath()
@@ -226,6 +226,8 @@ class PlayApplication:
             args += ["--http.port=%s" % self.play_env['http.port']]
         if self.play_env.has_key('https.port'):
             args += ["--https.port=%s" % self.play_env['https.port']]
+            
+        java_args.append('-Dfile.encoding=utf-8')
         
         java_cmd = [self.java_path(), '-javaagent:%s' % self.agent_path()] + java_args + ['-classpath', cp_args, '-Dapplication.path=%s' % self.path, '-Dplay.id=%s' % self.play_env["id"], className] + args
         return java_cmd
