@@ -6,34 +6,37 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.InvocationTargetException;
 import java.util.List;
+import play.Logger;
 import play.Play;
 import play.mvc.*;
 import play.utils.*;
 
 public class Secure extends Controller {
 
-   @Before(unless = {"login", "authenticate", "logout", "askGoogle", "finishAuth"})
+   @Before(unless = {"login", "authenticate", "logout"})
    static void checkAccess() throws Throwable {
       // Authent
-      if (!session.contains("username")) {
-         flash.put("url", request.method.equals("GET") ? request.url : "/"); // seems a good default
+      if (!Secure.class.isAssignableFrom(getControllerClass())) {
+         if (!session.contains("username")) {
+            flash.put("url", request.method.equals("GET") ? request.url : "/"); // seems a good default
 
-
-         Class securityHandler = getHandler();
-         try {
-            Java.invokeStaticOrParent(securityHandler, "login");
-         } catch (InvocationTargetException e) {
-            throw e.getTargetException();
+            Class securityHandler = getHandler();
+            try {
+               Java.invokeStaticOrParent(securityHandler, "login");
+            } catch (InvocationTargetException e) {
+               throw e.getTargetException();
+            }
          }
-      }
-      // Checks
-      Check check = getActionAnnotation(Check.class);
-      if (check != null) {
-         check(check);
-      }
-      check = getControllerInheritedAnnotation(Check.class);
-      if (check != null) {
-         check(check);
+
+         // Checks
+         Check check = getActionAnnotation(Check.class);
+         if (check != null) {
+            check(check);
+         }
+         check = getControllerInheritedAnnotation(Check.class);
+         if (check != null) {
+            check(check);
+         }
       }
    }
 
@@ -58,14 +61,14 @@ public class Secure extends Controller {
 
       if (Secure.class.isAssignableFrom(securityHandler)) {
          return securityHandler;
+      } else {
+         return Secure.class;
       }
    }
 // ~~~ Login
 
    public static void login() throws Throwable {
       BasicSecure.login();
-
-
    }
 
    public static void logout() throws Throwable {
@@ -84,19 +87,12 @@ public class Secure extends Controller {
       Security.invoke("onAuthenticated");
       String url = flash.get("url");
 
-
       if (url == null) {
          url = "/";
 
 
       }
       redirect(url);
-
-
-
-
-
-
    }
 
    public static class Security extends Controller {

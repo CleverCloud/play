@@ -28,6 +28,7 @@ public class GoogleSecure extends Secure {
    public static final String GOOGLEURL = "https://www.google.com/accounts/o8/site-xrds?hd=";
 
    public static void login() {
+      Logger.debug("google login");
       askGoogle(Play.configuration.getProperty("auth.googledomain", request.domain));
    }
 
