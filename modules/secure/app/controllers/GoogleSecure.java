@@ -16,6 +16,7 @@ import org.expressme.openid.OpenIdManager;
 import play.Logger;
 import play.Play;
 import play.cache.Cache;
+import play.data.validation.Validation;
 import play.mvc.Router;
 
 /**
@@ -29,6 +30,7 @@ public class GoogleSecure extends Secure {
 
    public static void login() {
       Logger.debug("google login");
+
       askGoogle(Play.configuration.getProperty("auth.googledomain", request.domain));
    }
 
@@ -43,6 +45,8 @@ public class GoogleSecure extends Secure {
       map.put("id", finishID);
       manager.setReturnTo("http://" + request.domain + Router.reverse("GoogleSecure.finishAuth", map));
 
+      Logger.debug("endpoint : %s", GOOGLEURL + domain);
+
 
       Endpoint endpoint = manager.lookupEndpoint(GOOGLEURL + domain);
       Association association = manager.lookupAssociation(endpoint);
@@ -54,6 +58,8 @@ public class GoogleSecure extends Secure {
       process.endPoint = endpoint;
 
       Cache.add(finishID, process, "10min");
+
+      Logger.debug("process : %s", Cache.get(finishID).toString());
 
       flash.keep("url");
       redirect(authUrl);
@@ -73,7 +79,16 @@ public class GoogleSecure extends Secure {
          OpenIdManager manager = process.manager;
          Authentication auth = manager.getAuthentication(createRequest(request.url), process.association.getRawMacKey(), "ext1");
 
-         Secure.Security.invokeFor(GoogleSecure.class, "authenticate", auth.getIdentity(), null);
+         Logger.debug("before invoke for");
+
+
+         Boolean allowed = (Boolean) Secure.Security.invokeFor(GoogleSecure.class, "authenticate", auth.getIdentity(), "");
+         if(Validation.hasErrors() || !allowed) {
+            flash.keep("url");
+            flash.error("secure.error");
+            params.flash();
+            login();
+         }
 
          session.put("username", auth.getIdentity());
          session.put("fullName", auth.getFullname());
@@ -84,7 +99,7 @@ public class GoogleSecure extends Secure {
 
          redirectToOriginalURL();
       } catch (Throwable ex) {
-         Logger.error(ex.getMessage());
+         Logger.error("Exception when I don't know : %s", ex.getMessage());
       }
 
 

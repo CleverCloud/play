@@ -52,4 +52,12 @@ public class GoogleAuthProcess implements Serializable {
         hash = 53 * hash + (this.auth != null ? this.auth.hashCode() : 0);
         return hash;
     }
+
+   @Override
+   public String toString() {
+      return "GoogleAuthProcess{" + " manager=" + manager + ", endPoint=" + endPoint + ", association=" + association + ", auth=" + auth + '}';
+   }
+
+    
+
 }

@@ -5,9 +5,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.InvocationTargetException;
+import java.util.LinkedList;
 import java.util.List;
 import play.Logger;
 import play.Play;
+import play.classloading.ApplicationClasses.ApplicationClass;
 import play.mvc.*;
 import play.utils.*;
 
@@ -77,9 +79,7 @@ public class Secure extends Controller {
       response.removeCookie("rememberme");
       Security.invoke("onDisconnected");
       flash.success("secure.logout");
-      login();
-
-
+      redirectToOriginalURL();
    }
 
    // ~~~ Utils
@@ -194,22 +194,25 @@ public class Secure extends Controller {
 
       protected static Object invokeFor(Class<? extends Secure> classFor, String m, Object... args) throws Throwable {
          Class security = null;
-         List<Class> classes = Play.classloader.getAssignableClasses(Security.class);
+         List<ApplicationClass> classes = Play.classes.getAssignableClasses(Security.class);
+
+         Logger.debug("classes : %s", classes);
 
          if (classes.isEmpty()) {
+            Logger.debug("empty");
             security = Security.class;
          } else {
             classesFor:
-            for (Class cl : classes) {
+            for (ApplicationClass acl : classes) {
                // Find the Security class that adds functionalities to the current secure handler
-               if (cl.isAnnotationPresent(Secure.For.class)) {
-                  Class whatFor = ((Secure.For) cl.getAnnotation(Secure.For.class)).value();
+               if (acl.javaClass.isAnnotationPresent(Secure.For.class)) {
+                  Class whatFor = ((Secure.For) acl.javaClass.getAnnotation(Secure.For.class)).value();
                   if (whatFor.equals(classFor)) {
-                     security = cl;
+                     security = acl.javaClass;
                      break classesFor;
                   }
                } else {
-                  security = cl;
+                  security = acl.javaClass;
                }
 
             }
