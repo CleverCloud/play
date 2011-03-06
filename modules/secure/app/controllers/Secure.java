@@ -5,7 +5,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.lang.reflect.InvocationTargetException;
-import java.util.LinkedList;
 import java.util.List;
 import play.Logger;
 import play.Play;
@@ -13,6 +12,10 @@ import play.classloading.ApplicationClasses.ApplicationClass;
 import play.mvc.*;
 import play.utils.*;
 
+/**
+ * This class cannot be used by itself.
+ * @author Julien Durillon
+ */
 public class Secure extends Controller {
 
    @Before(unless = {"login", "authenticate", "logout"})
