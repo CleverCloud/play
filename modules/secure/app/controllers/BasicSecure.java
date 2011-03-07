@@ -1,14 +1,12 @@
 package controllers;
 
-import play.libs.Crypto;
 import play.mvc.Http;
 import play.data.validation.*;
 import play.libs.*;
-import play.utils.*;
 
 /**
- *
- * @author judu
+ * This is the same as the old secure : displays a form and then checks the login and the password.
+ * @author Julien Durillon
  */
 public class BasicSecure extends Secure {
 
